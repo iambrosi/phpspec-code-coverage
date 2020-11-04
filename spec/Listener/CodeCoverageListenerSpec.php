@@ -10,22 +10,45 @@ use PhpSpec\Event\SuiteEvent;
 use PhpSpec\ObjectBehavior;
 use Prophecy\Argument;
 use SebastianBergmann\CodeCoverage\CodeCoverage;
+use SebastianBergmann\CodeCoverage\Driver\Driver;
 use SebastianBergmann\CodeCoverage\Filter;
-use SebastianBergmann\CodeCoverage\Report;
+use SebastianBergmann\CodeCoverage\Report\Html\Facade;
+use SebastianBergmann\CodeCoverage\Version;
+use function in_array;
 
 /**
  * @author Henrik Bjornskov
  */
 class CodeCoverageListenerSpec extends ObjectBehavior
 {
+    /**
+     * @var CodeCoverage
+     */
+    private $coverage;
+
+    public function getMatchers(): array
+    {
+        return [
+            'haveIncludedFile' => function ($subject, string $file) {
+                $isLegacy = version_compare(Version::id(), '9.0.0', '<');
+
+                $filter = $this->coverage->filter();
+                if ($isLegacy && in_array($file, $filter->getWhitelist(), true)) {
+                    return true;
+                }
+
+                if (!$isLegacy && !$filter->isExcluded($file)) {
+                    return true;
+                }
+
+                return false;
+            },
+        ];
+    }
+
     public function it_is_initializable()
     {
         $this->shouldHaveType(CodeCoverageListener::class);
-    }
-
-    public function let(ConsoleIO $io)
-    {
-        $this->beConstructedWith($io, new CodeCoverage(), []);
     }
 
     /**
@@ -121,78 +144,72 @@ class CodeCoverageListenerSpec extends ObjectBehavior
      *
      * $this->afterSuite($event);
      * }
-     *
-     * function it_should_output_html_report(
-     * CodeCoverage $coverage,
-     * Report\Html\Facade $html,
-     * SuiteEvent $event,
-     * ConsoleIO $io
-     * ) {
-     * $reports = array(
-     * 'html' => $html
-     * );
-     *
-     * $this->beConstructedWith($io, $coverage, $reports);
-     * $this->setOptions(array(
-     * 'format' => 'html',
-     * 'output' => array('html' => 'coverage'),
-     * ));
-     *
-     * $io->isVerbose()->willReturn(false);
-     * $io->writeln(Argument::any())->shouldNotBeCalled();
-     *
-     * $html->process($coverage, 'coverage')->willReturn('report');
-     *
-     * $this->afterSuite($event);
-     * }
-     *
-     * function it_should_provide_extra_output_in_verbose_mode(
-     * CodeCoverage $coverage,
-     * Report\Html\Facade $html,
-     * SuiteEvent $event,
-     * ConsoleIO $io
-     * ) {
-     * $reports = array(
-     * 'html' => $html,
-     * );
-     *
-     * $this->beConstructedWith($io, $coverage, $reports);
-     * $this->setOptions(array(
-     * 'format' => 'html',
-     * 'output' => array('html' => 'coverage'),
-     * ));
-     *
-     * $io->isVerbose()->willReturn(true);
-     * $io->writeln('')->shouldBeCalled();
-     * $io->writeln('Generating code coverage report in html format ...')->shouldBeCalled();
-     *
-     * $this->afterSuite($event);
-     * }
-     *
-     * function it_should_correctly_handle_black_listed_files_and_directories(
-     * CodeCoverage $coverage,
-     * SuiteEvent $event,
-     * Filter $filter,
-     * ConsoleIO $io
-     * )
-     * {
-     * $this->beConstructedWith($io, $coverage, array());
-     *
-     * $coverage->filter()->willReturn($filter);
-     *
-     * $this->setOptions(array(
-     * 'whitelist' => array('src'),
-     * 'blacklist' => array('src/filter'),
-     * 'whitelist_files' => array('src/filter/whilelisted_file'),
-     * 'blacklist_files' => array('src/filtered_file')
-     * ));
-     *
-     * $filter->addDirectoryToWhitelist('src')->shouldBeCalled();
-     * $filter->removeDirectoryFromWhitelist('src/filter')->shouldBeCalled();
-     * $filter->addFileToWhitelist('src/filter/whilelisted_file')->shouldBeCalled();
-     * $filter->removeFileFromWhitelist('src/filtered_file')->shouldBeCalled();
-     *
-     * $this->beforeSuite($event);
-     * }
      */
+    public function it_should_output_html_report(SuiteEvent $event, ConsoleIO $io): void
+    {
+        $reports = [
+            'html' => new Facade(),
+        ];
+
+        $this->beConstructedWith($io, $this->coverage, $reports);
+        $this->setOptions([
+            'format' => 'html',
+            'output' => ['html' => '/tmp/coverage'],
+        ]);
+
+        $io->isVerbose()->willReturn(false);
+        $io->writeln(Argument::any())->shouldNotBeCalled();
+
+//        $html->process($this->coverage, 'coverage')->willReturn('report');
+
+        $this->afterSuite($event);
+    }
+
+    public function it_should_provide_extra_output_in_verbose_mode(
+        SuiteEvent $event,
+        ConsoleIO $io
+    ): void {
+        $reports = [
+            'html' => new Facade(),
+        ];
+
+        $this->beConstructedWith($io, $this->coverage, $reports);
+        $this->setOptions([
+            'format' => 'html',
+            'output' => ['html' => '/tmp/coverage'],
+        ]);
+
+        $io->isVerbose()->willReturn(true);
+        $io->writeln()->shouldBeCalled();
+        $io->writeln('Generating code coverage report in html format ...')->shouldBeCalled();
+
+        $this->afterSuite($event);
+
+        if (!is_dir('/tmp/')) {
+
+        }
+    }
+
+    public function it_should_correctly_handle_excluded_files_and_directories(SuiteEvent $event): void
+    {
+        $this->setOptions([
+            'whitelist'       => [__DIR__.'/fixtures/included'],
+            'blacklist'       => [__DIR__.'/fixtures/included/dir2'],
+            'whitelist_files' => [__DIR__.'/fixtures/file.php'],
+            'blacklist_files' => [__DIR__.'/fixtures/included/excluded.php'],
+        ]);
+
+        $this->beforeSuite($event);
+
+        $this->shouldHaveIncludedFile(__DIR__.'/fixtures/file.php');
+        $this->shouldHaveIncludedFile(__DIR__.'/fixtures/included/dir1/file.php');
+        $this->shouldNotHaveIncludedFile(__DIR__.'/fixtures/included/dir2/file.php');
+        $this->shouldNotHaveIncludedFile(__DIR__.'/fixtures/included/excluded.php');
+    }
+
+    public function let(ConsoleIO $io, Driver $driver)
+    {
+        $this->coverage = new CodeCoverage($driver->getWrappedObject(), new Filter());
+        $this->beConstructedWith($io, $this->coverage, []);
+    }
 }

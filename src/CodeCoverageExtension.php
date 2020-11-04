@@ -3,7 +3,7 @@
 /**
  * This file is part of the friends-of-phpspec/phpspec-code-coverage package.
  *
- * @author ek9 <dev@ek9.co>
+ * @author  ek9 <dev@ek9.co>
  * @license MIT
  *
  * For the full copyright and license information, please see the LICENSE file
@@ -20,6 +20,7 @@ use PhpSpec\Extension;
 use PhpSpec\ServiceContainer;
 use RuntimeException;
 use SebastianBergmann\CodeCoverage\CodeCoverage;
+use SebastianBergmann\CodeCoverage\Driver\Selector;
 use SebastianBergmann\CodeCoverage\Filter;
 use SebastianBergmann\CodeCoverage\Report;
 use SebastianBergmann\CodeCoverage\Version;
@@ -51,7 +52,14 @@ class CodeCoverageExtension implements Extension
 
         $container->define('code_coverage', static function ($container) {
             try {
-                $coverage = new CodeCoverage(null, $container->get('code_coverage.filter'));
+                $filter = $container->get('code_coverage.filter');
+                $driver = null;
+
+                if (version_compare(Version::id(), '9.0.0', '>=')) {
+                    $driver = (new Selector())->forLineCoverage($filter);
+                }
+
+                $coverage = new CodeCoverage($driver, $filter);
             } catch (RuntimeException $error) {
                 throw new NoCoverageDriverAvailableException(
                     'There is no available coverage driver to be used.',

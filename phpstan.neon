@@ -1,0 +1,5 @@
+parameters:
+    ignoreErrors:
+        - '#^Call to an undefined method SebastianBergmann\\CodeCoverage\\Filter\:\:(in|ex)clude(Directory|File)\(\).$#'
+        - '#^Call to method forLineCoverage\(\) on an unknown class SebastianBergmann\\CodeCoverage\\Driver\\Selector.$#'
+        - '#^Instantiated class SebastianBergmann\\CodeCoverage\\Driver\\Selector not found.$#'

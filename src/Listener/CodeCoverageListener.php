@@ -18,7 +18,9 @@ use PhpSpec\Console\ConsoleIO;
 use PhpSpec\Event\ExampleEvent;
 use PhpSpec\Event\SuiteEvent;
 use SebastianBergmann\CodeCoverage\CodeCoverage;
+use SebastianBergmann\CodeCoverage\Filter;
 use SebastianBergmann\CodeCoverage\Report;
+use SebastianBergmann\CodeCoverage\Version;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
@@ -145,6 +147,14 @@ class CodeCoverageListener implements EventSubscriberInterface
 
         $filter = $this->coverage->filter();
 
+        if (version_compare(Version::id(), '9.0.0', '>=')) {
+            $this->setupCoverageFilter($filter);
+
+            return;
+        }
+
+        // Legacy Filter
+
         foreach ($this->options['whitelist'] as $option) {
             $filter->addDirectoryToWhitelist($option);
         }
@@ -154,7 +164,7 @@ class CodeCoverageListener implements EventSubscriberInterface
         }
 
         foreach ($this->options['whitelist_files'] as $option) {
-            $filter->addFilesToWhitelist($option);
+            $filter->addFileToWhitelist($option);
         }
 
         foreach ($this->options['blacklist_files'] as $option) {
@@ -181,5 +191,24 @@ class CodeCoverageListener implements EventSubscriberInterface
     public function setOptions(array $options): void
     {
         $this->options = $options + $this->options;
+    }
+
+    private function setupCoverageFilter(Filter $filter): void
+    {
+        foreach ($this->options['whitelist'] as $option) {
+            $filter->includeDirectory($option);
+        }
+
+        foreach ($this->options['blacklist'] as $option) {
+            $filter->excludeDirectory($option);
+        }
+
+        foreach ($this->options['whitelist_files'] as $option) {
+            $filter->includeFile($option);
+        }
+
+        foreach ($this->options['blacklist_files'] as $option) {
+            $filter->excludeFile($option);
+        }
     }
 }
